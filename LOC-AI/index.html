@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' data: http://127.0.0.1:11434 https://api.groq.com https://api.openai.com https://fonts.googleapis.com https://fonts.gstatic.com;">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LOC-AI</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;800&family=JetBrains+Mono:wght@300;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+    <div id="splash-screen">
+        <div class="splash-content">
+            <img src="logo.png" class="splash-logo" onerror="this.style.display='none'">
+            <h1 class="splash-title">LOC<span class="highlight">AI</span></h1>
+            <div class="loader-line"></div>
+            <div class="system-init">INITIALIZING NEURAL CORE...</div>
+        </div>
+    </div>
+
+    <div id="settings-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-window">
+            <div class="modal-header">
+                <span>SYSTEM CONFIGURATION</span>
+                <button id="close-settings" class="close-modal">×</button>
+            </div>
+            <div class="modal-content">
+                <div class="setting-group">
+                    <label>ONLINE API KEY (Groq)</label>
+                    <input type="password" id="api-key-input" placeholder="gsk_...">
+                </div>
+                <div class="setting-group">
+                    <label>SYSTEM PERSONA (Optional)</label>
+                    <textarea id="system-prompt-input" placeholder="Ex: You are a Senior C++ Engineer. Be concise."></textarea>
+                    <p class="setting-hint">Defines how the AI behaves in God Mode.</p>
+                </div>
+                <button id="save-settings-btn">SAVE CONFIGURATION</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="app-container">
+        <div class="title-bar">
+            <div class="app-title">LOC-AI // MASTER_BUILD</div>
+            <div class="window-controls">
+                <button id="btn-min" class="win-btn min">−</button>
+                <button id="btn-max" class="win-btn max">□</button>
+                <button id="btn-close" class="win-btn close">×</button>
+            </div>
+        </div>
+
+        <div class="content-wrapper">
+            <div class="sidebar">
+                <div class="logo-area">
+                    <img src="logo.png" class="sidebar-logo" onerror="this.style.display='none'">
+                    <h1 class="logo-text">LOC<span class="highlight">AI</span></h1>
+                </div>
+                <button id="new-chat-btn" class="new-chat-btn"><span>+</span> NEW SESSION</button>
+                <div class="nav-section">
+                    <button class="mode-btn active"><span class="icon">⚡</span> GOD MODE (WEB)</button>
+                    <button class="mode-btn"><span class="icon">🛡️</span> BUNKER MODE (OFF)</button>
+                    <button id="btn-settings" class="mode-btn"><span class="icon">⚙️</span> SETTINGS</button>
+                </div>
+                <div class="history-section">
+                    <div class="history-header">ARCHIVES</div>
+                    <div class="history-list"></div>
+                </div>
+            </div>
+
+            <div class="main-chat">
+                <div class="chat-area" id="chat-display"></div>
+                
+                <div class="input-zone">
+                    <div id="file-preview" class="file-preview" style="display: none;">
+                        <span class="file-icon">📄</span> <span id="file-name"></span> <button id="remove-file" class="remove-file">×</button>
+                    </div>
+                    <div class="input-container">
+                        <input type="file" id="file-input" style="display: none;">
+                        <button id="attach-btn" class="attach-btn">📎</button>
+                        <input type="text" id="user-input" placeholder="Awaiting Command..." autocomplete="off">
+                        <button id="send-btn">EXECUTE</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="renderer.js"></script>
+</body>
+</html>

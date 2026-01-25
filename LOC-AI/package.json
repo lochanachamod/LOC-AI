@@ -1,0 +1,42 @@
+{
+  "name": "loc-ai",
+  "version": "1.0.0",
+  "description": "World Best Coding AI",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder"
+  },
+  "keywords": [
+    "ai",
+    "coding"
+  ],
+  "author": "Lochana Chamod",
+  "license": "ISC",
+  "devDependencies": {
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8"
+  },
+  "dependencies": {
+    "highlight.js": "^11.10.0",
+    "marked": "^15.0.3"
+  },
+  "build": {
+    "appId": "com.lochana.locai",
+    "productName": "LOC-AI",
+    "win": {
+      "target": "nsis",
+      "icon": "icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true
+    },
+    "files": [
+      "**/*",
+      "!dist/*",
+      "!node_modules/.cache/*"
+    ]
+  }
+}
