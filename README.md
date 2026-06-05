@@ -3,6 +3,13 @@
 
   # LOC-AI
 
+  <p align="center">
+    <img src="https://img.shields.io/badge/version-2.0.0-blue.svg" alt="Version">
+    <img src="https://img.shields.io/badge/platform-Windows%20|%20macOS%20|%20Linux-lightgrey.svg" alt="Platform">
+    <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
+    <img src="https://img.shields.io/github/stars/lochanachamod/LOC-AI?style=social" alt="GitHub stars">
+  </p>
+
   <p><strong>The Dual-Engine Coding Assistant for Professional Developers</strong></p>
 
   <p>
