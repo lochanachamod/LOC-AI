@@ -40,9 +40,9 @@ LOC-AI needs a "Brain" to function offline.
 *   **Delete**: Hover over any chat in the sidebar and click the Trash Bin icon to delete it permanently.
 
 ### 👁️ Project Vision (File Analysis)
-*   **Drag & Drop**: Drag any code file (`.py`, `.js`, `.html`, `.txt`) directly onto the app window.
+*   **Drag & Drop**: Drag any code file (`.py`, `.js`, `.txt`), **document (`.pdf`)**, or **image/screenshot (`.png`, `.jpg`)** directly onto the app window. LOC-AI will instantly scan and extract the text from the files!
 *   **Blue Chip**: A blue tag will appear showing the file is attached.
-*   **Analyze**: Type your question (e.g., "Find the bug in this file") and hit Enter. The AI will read the file and fix it.
+*   **Analyze**: Type your question (e.g., "Find the bug in this screenshot") and hit Enter. The AI will read the extracted text and answer.
 
 ### 🎨 Cyber-Glass Interface
 *   Enjoy a distraction-free, high-contrast dark mode designed for late-night coding sessions.

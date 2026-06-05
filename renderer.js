@@ -299,12 +299,18 @@ document.addEventListener('drop', (e) => {
 
 async function handleFile(f) { 
     try { 
+        document.getElementById('file-preview').style.display = 'inline-flex'; 
+        document.getElementById('file-name').innerText = f.name + " (Scanning...)";
+        
         const path = window.api.getPathForFile(f);
         ATTACHED_FILE_CONTENT = await window.api.readFile(path); 
         ATTACHED_FILE_NAME = f.name; 
-        document.getElementById('file-preview').style.display = 'inline-flex'; 
+        
         document.getElementById('file-name').innerText = f.name; 
-    } catch(e) { alert("Error reading file"); } 
+    } catch(e) { 
+        alert("Error reading file: " + e.message); 
+        document.getElementById('remove-file').click();
+    } 
 }
 document.getElementById('remove-file').onclick = () => { ATTACHED_FILE_CONTENT = null; document.getElementById('file-preview').style.display = 'none'; fileInput.value = ''; };
 

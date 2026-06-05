@@ -2,6 +2,8 @@ const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+const pdfParse = require('pdf-parse');
+const Tesseract = require('tesseract.js');
 
 let win;
 
@@ -39,7 +41,20 @@ ipcMain.on('app-close', () => { win.close(); });
 // Secure File System Access
 ipcMain.handle('read-file', async (event, filePath) => {
     try {
-        return fs.readFileSync(filePath, 'utf-8');
+        const ext = path.extname(filePath).toLowerCase();
+        
+        if (ext === '.pdf') {
+            const dataBuffer = fs.readFileSync(filePath);
+            const data = await pdfParse(dataBuffer);
+            return data.text;
+        } 
+        else if (ext === '.png' || ext === '.jpg' || ext === '.jpeg') {
+            const result = await Tesseract.recognize(filePath, 'eng');
+            return result.data.text;
+        } 
+        else {
+            return fs.readFileSync(filePath, 'utf-8');
+        }
     } catch (error) {
         throw error;
     }

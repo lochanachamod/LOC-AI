@@ -42,7 +42,7 @@ LOC-AI solves the critical problem of relying solely on cloud-based AI by integr
 ## 🚀 Features
 
 *   **Cyber-Glass Interface**: A custom-built UI featuring neon aesthetics, glassmorphism, and advanced typography designed for readability and visual appeal.
-*   **Drag-and-Drop Analysis**: Seamlessly drag code files (`.py`, `.js`, `.txt`, `.cpp`) directly into the chat for instant AI analysis.
+*   **Drag-and-Drop Analysis**: Seamlessly drag code files (`.py`, `.js`, `.txt`), **documents (`.pdf`)**, or **images (`.png`, `.jpg`)** directly into the chat. LOC-AI instantly extracts the text and analyzes it.
 *   **Context Memory**: Intelligently remembers the last 6 messages to maintain conversational flow.
 *   **System Persona Customization**: Tailor the AI's behavior via the settings panel.
 *   **Offline First**: Total privacy when you need it using Bunker Mode.
