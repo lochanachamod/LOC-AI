@@ -15,6 +15,7 @@ function createWindow() {
         webPreferences: {
             nodeIntegration: false, // SECURE: No Node in renderer
             contextIsolation: true, // SECURE: Isolated context
+            sandbox: false, // SECURE: Allow preload script to use node modules
             preload: path.join(__dirname, 'preload.js') // SECURE: Bridge
         },
         icon: path.join(__dirname, 'icon.png')
