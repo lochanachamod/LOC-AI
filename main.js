@@ -2,7 +2,7 @@ const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
-const pdfParse = require('pdf-parse');
+const { PDFParse } = require('pdf-parse');
 const Tesseract = require('tesseract.js');
 
 let win;
@@ -45,7 +45,9 @@ ipcMain.handle('read-file', async (event, filePath) => {
         
         if (ext === '.pdf') {
             const dataBuffer = fs.readFileSync(filePath);
-            const data = await pdfParse(dataBuffer);
+            const parser = new PDFParse({ data: dataBuffer });
+            const data = await parser.getText();
+            await parser.destroy();
             return data.text;
         } 
         else if (ext === '.png' || ext === '.jpg' || ext === '.jpeg') {
