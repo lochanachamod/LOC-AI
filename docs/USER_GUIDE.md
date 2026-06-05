@@ -25,6 +25,9 @@ LOC-AI needs a "Brain" to function offline.
    ```
 5. Done! Bunker Mode is now active.
 
+> **⚠️ CRITICAL: Always Keep Ollama Open!**
+> Whenever you use LOC-AI in Bunker Mode, you must ensure the **Ollama app is running in your background (system tray)**. If Ollama is completely closed, LOC-AI will fail to connect and will not be able to generate offline responses.
+
 ### Step 3: Activate Online Brain (Required for God Mode)
 1. Open LOC-AI.
 2. Click the **"⚡ GOD MODE"** button in the sidebar.

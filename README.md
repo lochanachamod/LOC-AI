@@ -94,7 +94,8 @@ The compiled installer will be available in the `dist` directory.
 ## 💡 Usage
 
 ### Switching Modes
-*   **🛡️ Bunker Mode**: Activated by default (shield icon). Ensure Ollama is running in your system tray.
+*   **🛡️ Bunker Mode**: Activated by default (shield icon). 
+    > **⚠️ IMPORTANT:** You must ensure the **Ollama application is actively running in your system tray** (background) whenever you want to use Bunker Mode. If Ollama is closed, the offline AI will not respond.
 *   **⚡ God Mode**: Click the lightning bolt icon. Enter your Groq API key in the settings panel to activate.
 
 ### File Analysis
