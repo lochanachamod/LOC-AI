@@ -1,36 +1,26 @@
-const fs = require('fs');
-const path = require('path');
-const os = require('os');
+// Storage is now managed securely via the preload API
 
-const DATA_DIR = path.join(os.homedir(), '.loc-ai');
-const HISTORY_FILE = path.join(DATA_DIR, 'history.json');
-
-if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR);
-
-function loadHistory() {
-    if (!fs.existsSync(HISTORY_FILE)) return [];
-    try {
-        const data = fs.readFileSync(HISTORY_FILE, 'utf-8');
-        return JSON.parse(data);
-    } catch (e) { return []; }
+async function loadHistory() {
+    return await window.api.loadHistory();
 }
 
-function saveChat(sessionId, title, messages) {
-    let history = loadHistory();
+async function saveChat(sessionId, title, messages) {
+    let history = await window.api.loadHistory();
     const existingIndex = history.findIndex(h => h.id === sessionId);
     const sessionData = { id: sessionId, title: title || 'New Session', timestamp: Date.now(), messages: messages };
 
     if (existingIndex >= 0) history[existingIndex] = sessionData;
     else history.unshift(sessionData);
 
-    fs.writeFileSync(HISTORY_FILE, JSON.stringify(history, null, 2));
+    await window.api.saveHistory(history);
 }
 
-// NEW: Delete Function
-function deleteChat(sessionId) {
-    let history = loadHistory();
-    history = history.filter(h => h.id !== sessionId); // Remove the specific chat
-    fs.writeFileSync(HISTORY_FILE, JSON.stringify(history, null, 2));
+async function deleteChat(sessionId) {
+    let history = await window.api.loadHistory();
+    history = history.filter(h => h.id !== sessionId); 
+    await window.api.saveHistory(history);
 }
 
-module.exports = { loadHistory, saveChat, deleteChat };
+// Since we are no longer using CommonJS in the browser (due to nodeIntegration: false), 
+// we expose these globally or include them directly.
+window.storage = { loadHistory, saveChat, deleteChat };

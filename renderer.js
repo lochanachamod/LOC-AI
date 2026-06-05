@@ -1,12 +1,3 @@
-const { ipcRenderer, clipboard, webUtils } = require('electron');
-const { marked } = require('marked');
-const hljs = require('highlight.js');
-const fs = require('fs');
-const { loadHistory, saveChat, deleteChat } = require('./storage');
-
-// --- CONFIG ---
-marked.setOptions({ breaks: true, gfm: true });
-
 // --- VARIABLES ---
 let currentSessionId = Date.now().toString();
 let currentMessages = [];
@@ -17,7 +8,7 @@ let ATTACHED_FILE_CONTENT = null;
 let ATTACHED_FILE_NAME = null;
 
 // --- INIT ---
-window.addEventListener('DOMContentLoaded', () => {
+window.addEventListener('DOMContentLoaded', async () => {
     // Intro Animation
     setTimeout(() => {
         const splash = document.getElementById('splash-screen');
@@ -25,14 +16,12 @@ window.addEventListener('DOMContentLoaded', () => {
         setTimeout(() => splash.style.display = 'none', 500);
     }, 2000);
 
-    refreshSidebar();
+    await refreshSidebar();
     updateModeUI();
     document.getElementById('api-key-input').value = ONLINE_API_KEY;
     document.getElementById('system-prompt-input').value = SYSTEM_PROMPT;
     
     addMessage('LOC-AI CORE', 'System Initialized. Ready.', 'ai-message', false);
-    
-    // SAFETY: Ensure input is unlocked on start
     forceInputUnlock();
 });
 
@@ -44,7 +33,7 @@ function cleanAIResponse(text) {
                .replace(/# # #/g, "\n\n---");
 }
 
-// --- HELPER: FORCE UNLOCK INPUT (Fixes Freezing) ---
+// --- HELPER: FORCE UNLOCK INPUT ---
 function forceInputUnlock() {
     const input = document.getElementById('user-input');
     const btn = document.getElementById('send-btn');
@@ -55,7 +44,6 @@ function forceInputUnlock() {
     btn.style.opacity = "1";
     btn.style.cursor = "pointer";
     
-    // Remove any stuck thinking indicators
     const existingThinker = document.querySelector('.thinking-pulse');
     if(existingThinker) existingThinker.remove();
 }
@@ -75,136 +63,166 @@ async function sendMessage() {
     input.value = '';
 
     if (currentMessages.length === 1) {
-        saveChat(currentSessionId, text.substring(0, 20) + "...", currentMessages);
-        refreshSidebar();
+        await window.storage.saveChat(currentSessionId, text.substring(0, 20) + "...", currentMessages);
+        await refreshSidebar();
     }
 
-    const thinkingId = showThinkingIndicator(); // Locks Input
+    // Prepare Streaming Bubble
+    const streamId = 'msg-' + Date.now();
+    addStreamBubble('LOC-AI CORE', streamId);
+    lockInputForStream();
 
     try {
         const contextHistory = currentMessages.slice(-6).map(m => `${m.sender}: ${m.text}`).join('\n');
         let systemInstruction = SYSTEM_PROMPT ? `[SYSTEM INSTRUCTION: ${SYSTEM_PROMPT}]\n\n` : "";
         
-        // --- PROMPT ENGINEERING FIX (Fixes "Cannot read file") ---
-        // We explicitly tell the AI "Here is the content" so it doesn't think it needs to read a disk file.
         let prompt = "";
-        
         if (ATTACHED_FILE_CONTENT) {
-            prompt = `${systemInstruction}
-=== BEGIN FILE CONTENT: ${ATTACHED_FILE_NAME} ===
-${ATTACHED_FILE_CONTENT}
-=== END FILE CONTENT ===
-
-[HISTORY]
-${contextHistory}
-
-[USER QUESTION]: ${text}
-(Please answer based on the file content provided above)`;
-            
-            // Clear the file from memory and UI
+            prompt = `${systemInstruction}=== BEGIN FILE CONTENT: ${ATTACHED_FILE_NAME} ===\n${ATTACHED_FILE_CONTENT}\n=== END FILE CONTENT ===\n\n[HISTORY]\n${contextHistory}\n\n[USER QUESTION]: ${text}`;
             document.getElementById('remove-file').click();
         } else {
             prompt = `${systemInstruction}[HISTORY]\n${contextHistory}\n\n[USER]: ${text}`;
         }
 
-        let rawResponse;
+        let fullResponse = "";
+        
         if (APP_MODE === 'ONLINE') {
             if (!ONLINE_API_KEY) throw new Error("NO_API_KEY");
-            rawResponse = await queryGroqAI(prompt);
+            fullResponse = await streamGroqAI(prompt, streamId);
         } else {
-            rawResponse = await queryLocalAI(prompt);
+            fullResponse = await streamLocalAI(prompt, streamId);
         }
 
-        const polishedResponse = cleanAIResponse(rawResponse);
+        const polishedResponse = cleanAIResponse(fullResponse);
+        updateStreamBubble(streamId, polishedResponse);
         
-        // Remove specific thinking ID
-        const el = document.getElementById(thinkingId);
-        if(el) el.remove();
-        
-        // Ensure unlocked
-        forceInputUnlock(); 
-        
-        addMessage('LOC-AI CORE', polishedResponse, 'ai-message');
-        saveChat(currentSessionId, currentMessages[0].text.substring(0, 25), currentMessages);
+        // Save to memory
+        currentMessages.push({ sender: 'LOC-AI CORE', text: polishedResponse, className: 'ai-message' });
+        await window.storage.saveChat(currentSessionId, currentMessages[0].text.substring(0, 25), currentMessages);
 
     } catch (error) {
-        const el = document.getElementById(thinkingId);
+        const el = document.getElementById(streamId);
         if(el) el.remove();
-        forceInputUnlock(); // Ensure unlocked on error
-
+        
         if (error.message === "NO_API_KEY") {
             addMessage('SYSTEM', 'ACCESS DENIED: Set API Key in Settings.', 'ai-message');
             document.getElementById('settings-modal').style.display = 'flex';
         } else {
             addMessage('SYSTEM ERROR', error.message, 'ai-message');
         }
+    } finally {
+        forceInputUnlock();
     }
 }
 
-// --- API ---
-async function queryLocalAI(prompt) {
+// --- STREAMING API ---
+async function streamLocalAI(prompt, elementId) {
     const res = await fetch('http://127.0.0.1:11434/api/generate', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: 'qwen2.5-coder:1.5b', prompt: prompt, stream: false })
+        body: JSON.stringify({ model: 'qwen2.5-coder:1.5b', prompt: prompt, stream: true })
     });
     if (!res.ok) throw new Error("Ollama Connection Failed. Is it running?");
-    const data = await res.json();
-    return data.response;
+    
+    return await readStream(res, elementId, (chunk) => {
+        try {
+            const parsed = JSON.parse(chunk);
+            return parsed.response || "";
+        } catch(e) { return ""; }
+    });
 }
 
-async function queryGroqAI(prompt) {
+async function streamGroqAI(prompt, elementId) {
     const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${ONLINE_API_KEY}` },
-        body: JSON.stringify({ model: "llama-3.3-70b-versatile", messages: [{ role: "user", content: prompt }] })
+        body: JSON.stringify({ model: "llama-3.3-70b-versatile", messages: [{ role: "user", content: prompt }], stream: true })
     });
-    const data = await res.json();
-    if(data.error) throw new Error(data.error.message);
-    return data.choices[0].message.content;
+    if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error?.message || "API Error");
+    }
+
+    return await readStream(res, elementId, (chunk) => {
+        if(chunk.trim() === "[DONE]") return "";
+        try {
+            const parsed = JSON.parse(chunk);
+            return parsed.choices[0]?.delta?.content || "";
+        } catch(e) { return ""; }
+    }, "data: ");
+}
+
+async function readStream(response, elementId, extractDelta, prefixToRemove = null) {
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+    let fullText = "";
+    
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        const chunkStr = decoder.decode(value, { stream: true });
+        const lines = chunkStr.split('\n');
+        
+        for (let line of lines) {
+            line = line.trim();
+            if(!line) continue;
+            if(prefixToRemove && line.startsWith(prefixToRemove)) {
+                line = line.substring(prefixToRemove.length);
+            }
+            const delta = extractDelta(line);
+            fullText += delta;
+            updateStreamBubble(elementId, fullText);
+        }
+    }
+    return fullText;
 }
 
 // --- RENDERERS ---
-function addMessage(sender, text, className, save = true) {
+function lockInputForStream() {
+    const input = document.getElementById('user-input');
+    const btn = document.getElementById('send-btn');
+    input.disabled = true; input.placeholder = "Processing Stream..."; btn.disabled = true;
+}
+
+function addStreamBubble(sender, id) {
+    const msgDiv = document.createElement('div');
+    msgDiv.classList.add('message', 'ai-message');
+    msgDiv.id = id;
+    msgDiv.innerHTML = `<span class="msg-sender">${sender}</span><div class="msg-content">...</div>`;
+    const display = document.getElementById('chat-display');
+    display.appendChild(msgDiv);
+    display.scrollTop = display.scrollHeight;
+}
+
+async function updateStreamBubble(id, text) {
+    const el = document.getElementById(id);
+    if(el) {
+        let html = await window.api.parseMarkdown(text);
+        el.querySelector('.msg-content').innerHTML = html;
+        const display = document.getElementById('chat-display');
+        display.scrollTop = display.scrollHeight;
+    }
+}
+
+async function addMessage(sender, text, className, save = true) {
     if (save) currentMessages.push({ sender, text, className });
     const msgDiv = document.createElement('div');
     msgDiv.classList.add('message', className);
     let html = text;
-    if (className === 'ai-message') { try { html = marked.parse(text); } catch (e) { html = text; } }
+    if (className === 'ai-message') { try { html = await window.api.parseMarkdown(text); } catch (e) { html = text; } }
     msgDiv.innerHTML = `<span class="msg-sender">${sender}</span><div class="msg-content">${html}</div>`;
     const display = document.getElementById('chat-display');
     display.appendChild(msgDiv);
     display.scrollTop = display.scrollHeight;
 }
 
-const renderer = new marked.Renderer();
-renderer.code = function(token, lang) {
-    let content = (typeof token === 'object' && token.text) ? token.text : String(token || "");
-    let lg = (typeof token === 'object' && token.lang) ? token.lang : lang;
-    const validLang = hljs.getLanguage(lg || 'plaintext') ? lg : 'plaintext';
-    let highlighted;
-    try { highlighted = hljs.highlight(content, { language: validLang }).value; } catch (e) { highlighted = content; }
-    return `<div class="code-wrapper"><div class="code-header"><span class="lang-tag">${validLang.toUpperCase()}</span><button class="copy-btn" onclick="copyCode(this)">COPY</button></div><pre><code class="hljs ${validLang}">${highlighted}</code></pre><textarea class="raw-code" style="display:none;">${content}</textarea></div>`;
+window.copyCode = function(btn) { 
+    window.api.clipboardWrite(btn.closest('.code-wrapper').querySelector('.raw-code').value); 
+    btn.innerText = 'COPIED!'; setTimeout(() => btn.innerText = 'COPY', 2000); 
 };
-marked.use({ renderer });
-
-// --- UI HELPERS ---
-function showThinkingIndicator() {
-    const id = 'th-' + Date.now();
-    const div = document.createElement('div'); div.id = id; div.classList.add('message', 'ai-message', 'thinking-pulse');
-    div.innerHTML = `<span class="msg-sender">LOC-AI</span><div class="msg-content">NEURAL PROCESSING...</div>`;
-    document.getElementById('chat-display').appendChild(div);
-    
-    // Lock Input
-    const input = document.getElementById('user-input');
-    const btn = document.getElementById('send-btn');
-    input.disabled = true; input.placeholder = "Processing..."; btn.disabled = true;
-    return id;
-}
-
-window.copyCode = function(btn) { clipboard.writeText(btn.closest('.code-wrapper').querySelector('.raw-code').value); btn.innerText = 'COPIED!'; setTimeout(() => btn.innerText = 'COPY', 2000); };
 
 // --- SIDEBAR ---
-function refreshSidebar() {
-    const history = loadHistory();
+async function refreshSidebar() {
+    const history = await window.storage.loadHistory();
     const list = document.querySelector('.history-list');
     list.innerHTML = '';
     history.forEach(session => {
@@ -217,30 +235,23 @@ function refreshSidebar() {
     });
 }
 
-window.deleteSession = function(id, event) {
+window.deleteSession = async function(id, event) {
     event.stopPropagation();
     if(confirm('Delete chat?')) { 
-        deleteChat(id); 
-        refreshSidebar(); 
+        await window.storage.deleteChat(id); 
+        await refreshSidebar(); 
         if(id === currentSessionId) document.getElementById('new-chat-btn').click(); 
     }
 };
 
-function loadSession(session) {
-    // Safety Unlock when switching chats
+async function loadSession(session) {
     forceInputUnlock();
-    
     currentSessionId = session.id; currentMessages = session.messages;
     const display = document.getElementById('chat-display');
     display.innerHTML = '';
-    currentMessages.forEach(msg => {
-        const msgDiv = document.createElement('div'); msgDiv.classList.add('message', msg.className);
-        let html = msg.text; if(msg.className === 'ai-message') try { html = marked.parse(msg.text); } catch(e){}
-        msgDiv.innerHTML = `<span class="msg-sender">${msg.sender}</span><div class="msg-content">${html}</div>`;
-        display.appendChild(msgDiv);
-    });
-    display.scrollTop = display.scrollHeight;
-    refreshSidebar();
+    for(const msg of currentMessages) {
+        await addMessage(msg.sender, msg.text, msg.className, false);
+    }
 }
 
 // --- CONTROLS ---
@@ -250,10 +261,7 @@ const btnSettings = document.getElementById('btn-settings');
 const modal = document.getElementById('settings-modal');
 
 function updateModeUI() {
-    // Safety Unlock when switching modes
     forceInputUnlock();
-    
-    const input = document.getElementById('user-input');
     if (APP_MODE === 'ONLINE') { btnGod.classList.add('active'); btnBunker.classList.remove('active'); } 
     else { btnGod.classList.remove('active'); btnBunker.classList.add('active'); }
 }
@@ -270,18 +278,38 @@ document.getElementById('save-settings-btn').onclick = () => {
     modal.style.display = 'none'; 
 };
 
-// File Inputs
+// --- FILE INPUTS & DRAG OVERLAY ---
 const attachBtn = document.getElementById('attach-btn');
 const fileInput = document.getElementById('file-input');
 attachBtn.onclick = () => fileInput.click();
-fileInput.onchange = (e) => { const f = e.target.files[0]; if(f) handleFile(webUtils.getPathForFile(f), f.name); };
-document.addEventListener('drop', (e) => { e.preventDefault(); const f = e.dataTransfer.files[0]; if(f) handleFile(webUtils.getPathForFile(f), f.name); });
-document.addEventListener('dragover', e => e.preventDefault());
-function handleFile(path, name) { try { ATTACHED_FILE_CONTENT = fs.readFileSync(path, 'utf-8'); ATTACHED_FILE_NAME = name; document.getElementById('file-preview').style.display = 'inline-flex'; document.getElementById('file-name').innerText = name; } catch(e) { alert("Error reading file"); } }
+fileInput.onchange = (e) => { const f = e.target.files[0]; if(f) handleFile(f); };
+
+const dragOverlay = document.createElement('div');
+dragOverlay.classList.add('drag-overlay');
+dragOverlay.innerHTML = `<h2>DROP FILE TO ANALYZE</h2>`;
+document.body.appendChild(dragOverlay);
+
+document.addEventListener('dragover', e => { e.preventDefault(); dragOverlay.style.opacity = '1'; dragOverlay.style.pointerEvents = 'all'; });
+document.addEventListener('dragleave', e => { if (e.clientX === 0 && e.clientY === 0) { dragOverlay.style.opacity = '0'; dragOverlay.style.pointerEvents = 'none'; }});
+document.addEventListener('drop', (e) => { 
+    e.preventDefault(); 
+    dragOverlay.style.opacity = '0'; dragOverlay.style.pointerEvents = 'none'; 
+    const f = e.dataTransfer.files[0]; if(f) handleFile(f); 
+});
+
+async function handleFile(f) { 
+    try { 
+        const path = window.api.getPathForFile(f);
+        ATTACHED_FILE_CONTENT = await window.api.readFile(path); 
+        ATTACHED_FILE_NAME = f.name; 
+        document.getElementById('file-preview').style.display = 'inline-flex'; 
+        document.getElementById('file-name').innerText = f.name; 
+    } catch(e) { alert("Error reading file"); } 
+}
 document.getElementById('remove-file').onclick = () => { ATTACHED_FILE_CONTENT = null; document.getElementById('file-preview').style.display = 'none'; fileInput.value = ''; };
 
 document.getElementById('new-chat-btn').onclick = () => { 
-    forceInputUnlock(); // Safety Unlock on new chat
+    forceInputUnlock(); 
     currentSessionId = Date.now().toString(); 
     currentMessages = []; 
     document.getElementById('chat-display').innerHTML = ''; 
@@ -291,6 +319,6 @@ document.getElementById('new-chat-btn').onclick = () => {
 
 document.getElementById('send-btn').onclick = sendMessage;
 document.getElementById('user-input').onkeypress = (e) => { if (e.key === 'Enter') sendMessage(); };
-document.getElementById('btn-min').onclick = () => ipcRenderer.send('app-minimize');
-document.getElementById('btn-max').onclick = () => ipcRenderer.send('app-maximize');
-document.getElementById('btn-close').onclick = () => ipcRenderer.send('app-close');
+document.getElementById('btn-min').onclick = () => window.api.minimize();
+document.getElementById('btn-max').onclick = () => window.api.maximize();
+document.getElementById('btn-close').onclick = () => window.api.close();
